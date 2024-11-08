@@ -1,0 +1,116 @@
+// Import required modules and libraries
+const express = require('express');
+const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+const session = require('express-session');
+const nodemailer = require('nodemailer');
+
+// Set up the Express app
+const app = express();
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+app.use(express.static('public'));
+app.use(session({
+    secret: 'mySecret',
+    resave: false,
+    saveUninitialized: true
+}));
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/healthPlatformDB', { useNewUrlParser: true, useUnifiedTopology: true });
+
+// Define user schema and model
+const userSchema = new mongoose.Schema({
+    email: String,
+    password: String,
+    age: Number,
+    weight: Number,
+    dietaryPreferences: String,
+    goals: String,
+    activityHistory: Array
+});
+const User = mongoose.model('User', userSchema);
+
+// Set up EJS for templating
+app.set('view engine', 'ejs');
+
+// Routes
+app.get('/', (req, res) => {
+    res.render('home');
+});
+
+app.get('/register', (req, res) => {
+    res.render('register');
+});
+
+app.post('/register', async (req, res) => {
+    const { email, password, age, weight, dietaryPreferences, goals } = req.body;
+    try {
+        const newUser = new User({
+            email, password, age, weight, dietaryPreferences, goals, activityHistory: []
+        });
+        await newUser.save();
+        res.redirect('/login');
+    } catch (error) {
+        res.status(500).send('Error registering user.');
+    }
+});
+
+app.get('/login', (req, res) => {
+    res.render('login');
+});
+
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const user = await User.findOne({ email, password });
+        if (user) {
+            req.session.user = user;
+            res.redirect('/dashboard');
+        } else {
+            res.status(401).send('Invalid credentials');
+        }
+    } catch (error) {
+        res.status(500).send('Error logging in.');
+    }
+});
+
+app.get('/dashboard', (req, res) => {
+    if (req.session.user) {
+        res.render('dashboard', { user: req.session.user });
+    } else {
+        res.redirect('/login');
+    }
+});
+
+// Create basic meal plan generation function
+app.post('/generate-meal-plan', (req, res) => {
+    const { age, weight, dietaryPreferences, goals } = req.session.user;
+    const mealPlan = generateMealPlan(age, weight, dietaryPreferences, goals);
+    req.session.user.activityHistory.push({ date: new Date(), action: 'Generated meal plan' });
+    res.render('mealPlan', { mealPlan });
+});
+
+function generateMealPlan(age, weight, dietaryPreferences, goals) {
+    // Simplified logic for demo purposes
+    return [
+        { meal: 'Breakfast', items: ['Oatmeal', 'Fruits', 'Green Tea'] },
+        { meal: 'Lunch', items: ['Grilled Chicken Salad', 'Quinoa', 'Steamed Vegetables'] },
+        { meal: 'Dinner', items: ['Baked Salmon', 'Brown Rice', 'Steamed Broccoli'] },
+        { meal: 'Snack', items: ['Yogurt', 'Almonds'] }
+    ];
+}
+
+// Run the server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+
+// Instructions to publish the Web App for free
+// 1. Sign up for a free hosting service like Render (render.com) or Cyclic (cyclic.sh).
+// 2. Deploy the code by linking your GitHub repository or uploading the project files.
+// 3. Once deployed, the platform will provide you with a public URL.
+// 4. Share this URL for access to your Web App.
+
+// Note: Ensure MongoDB is hosted online with services like MongoDB Atlas for deployment.
